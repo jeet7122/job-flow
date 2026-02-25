@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: jobflow
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jobflow
+    username: ${DB_USER}
+    password: ${DB_PASS}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          timezone: UTC
+  flyway:
+    enabled: true
+
+redis:
+  host: localhost
+  port: 6379
+
+server:
+  port: 8080
+
