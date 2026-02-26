@@ -23,3 +23,7 @@ redis:
 server:
   port: 8080
 
+jobflow:
+  worker:
+    enabled: false
+
