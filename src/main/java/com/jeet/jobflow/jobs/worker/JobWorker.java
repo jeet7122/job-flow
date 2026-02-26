@@ -4,6 +4,7 @@ import com.jeet.jobflow.jobs.JobRepository;
 import com.jeet.jobflow.jobs.domain.Job;
 import com.jeet.jobflow.jobs.domain.JobStatus;
 import com.jeet.jobflow.jobs.infra.JobQueueProducer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -29,6 +30,12 @@ public class JobWorker implements CommandLineRunner {
     private final StringRedisTemplate redisTemplate;
     private final JobRepository repository;
 
+    @Value("${jobflow.worker.id}")
+    private String workerId;
+
+    @Value("${jobflow.worker.lease-seconds:60}")
+    private long leaseSeconds;
+
     public JobWorker(StringRedisTemplate redisTemplate, JobRepository repository){
         this.redisTemplate = redisTemplate;
         this.repository = repository;
@@ -48,24 +55,40 @@ public class JobWorker implements CommandLineRunner {
 
     @Transactional
     public void process(UUID jobId){
+        Instant now = Instant.now();
+        Instant lockedUntil = now.plusSeconds(leaseSeconds);
+
+        int locked = repository.tryLockQueuedJob(
+                jobId,
+                JobStatus.QUEUED,
+                JobStatus.RUNNING,
+                workerId,
+                lockedUntil,
+                now
+        );
+
+        if (locked == 0) return;
+
         Optional<Job> optionalJob = repository.findById(jobId);
         if (optionalJob.isEmpty()) return;
         Job job = optionalJob.get();
-        if (job.getStatus() != JobStatus.QUEUED) return;
-        job.setStatus(JobStatus.RUNNING);
-        job.setUpdatedAt(Instant.now());
-        repository.save(job);
+
+        if (!workerId.equals(job.getLockedBy())) return;
 
         try{
+            System.out.println("Worker is processing job: " + jobId);
             sleep(200);
-            System.out.println("Worker is processing job" + jobId);
             job.setStatus(JobStatus.SUCCEEDED);
+            job.setLockedBy(null);
+            job.setLockedUntil(null);
             job.setUpdatedAt(Instant.now());
             repository.save(job);
         }
         catch (Exception e){
             job.setStatus(JobStatus.FAILED);
             job.setLastError(e.getMessage());
+            job.setLockedBy(null);
+            job.setLockedUntil(null);
             job.setUpdatedAt(Instant.now());
             repository.save(job);
         }

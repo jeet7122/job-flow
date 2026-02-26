@@ -25,5 +25,6 @@ server:
 
 jobflow:
   worker:
-    enabled: false
+    id: worker1
+    enabled: true
 
