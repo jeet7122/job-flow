@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -35,4 +36,7 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
             @Param("lockedUntil") Instant lockedUntil,
             @Param("now") Instant now
     );
+
+
+    List<Job> findTop100ByStatusAndRunAtLessThanEqualOrderByRunAtAsc(JobStatus status, Instant now);
 }

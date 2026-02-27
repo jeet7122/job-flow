@@ -1,6 +1,7 @@
 package com.jeet.jobflow.jobs.worker;
 
 import com.jeet.jobflow.jobs.JobRepository;
+import com.jeet.jobflow.jobs.common.time.Backoff;
 import com.jeet.jobflow.jobs.domain.Job;
 import com.jeet.jobflow.jobs.domain.JobStatus;
 import com.jeet.jobflow.jobs.infra.JobQueueProducer;
@@ -55,9 +56,11 @@ public class JobWorker implements CommandLineRunner {
 
     @Transactional
     public void process(UUID jobId){
+        System.out.println("Worker is Running Job: " + jobId);
         Instant now = Instant.now();
         Instant lockedUntil = now.plusSeconds(leaseSeconds);
 
+        System.out.println("Before try lock");
         int locked = repository.tryLockQueuedJob(
                 jobId,
                 JobStatus.QUEUED,
@@ -66,6 +69,7 @@ public class JobWorker implements CommandLineRunner {
                 lockedUntil,
                 now
         );
+        System.out.println("After Try Lock: " + locked);
 
         if (locked == 0) return;
 
@@ -78,6 +82,7 @@ public class JobWorker implements CommandLineRunner {
         try{
             System.out.println("Worker is processing job: " + jobId);
             sleep(200);
+
             job.setStatus(JobStatus.SUCCEEDED);
             job.setLockedBy(null);
             job.setLockedUntil(null);
@@ -85,11 +90,20 @@ public class JobWorker implements CommandLineRunner {
             repository.save(job);
         }
         catch (Exception e){
-            job.setStatus(JobStatus.FAILED);
             job.setLastError(e.getMessage());
+            job.setAttempt(job.getAttempt() + 1);
+            job.setUpdatedAt(Instant.now());
+
+            if (job.getAttempt() < job.getMaxAttempts()){
+                Duration delay = Backoff.compute(job.getAttempt(), Duration.ofSeconds(2), Duration.ofMinutes(5));
+                job.setStatus(JobStatus.RETRY_SCHEDULED);
+                job.setRunAt(Instant.now().plus(delay));
+            }
+            else {
+                job.setStatus(JobStatus.DEAD_LETTER);
+            }
             job.setLockedBy(null);
             job.setLockedUntil(null);
-            job.setUpdatedAt(Instant.now());
             repository.save(job);
         }
     }
