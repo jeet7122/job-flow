@@ -7,6 +7,8 @@ import com.jeet.jobflow.jobs.infra.JobQueueProducer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -48,8 +50,15 @@ public class JobServiceImplementation implements JobService {
         job.setCreatedAt(Instant.now());
         job.setUpdatedAt(Instant.now());
         jobRepository.save(job);
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        queueProducer.enqueue(job.getId());
+                    }
+                }
+        );
 
-        queueProducer.enqueue(job.getId());
         return job.getId();
     }
 

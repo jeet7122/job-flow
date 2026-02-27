@@ -9,6 +9,7 @@ import java.util.UUID;
 public class JobQueueProducer {
 
     public static final String QUEUE_KEY = "jobs.queue";
+    public static final String PROCESSING_KEY = "jobs.queue";
     private final StringRedisTemplate redisTemplate;
     public JobQueueProducer(StringRedisTemplate redisTemplate){
         this.redisTemplate = redisTemplate;
